@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .settings-icon {
+            cursor: pointer;
+            font-size: 24px;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+
+        .settings-icon:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            background: #f5f5f5;
+            border: none;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: #e0e0e0;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom: 3px solid #667eea;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .button-group button {
+            flex: 1;
+        }
+
+        .alert-list {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .alert-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .alert-item:hover {
+            background: #f5f5f5;
+        }
+
+        .alert-item.selected {
+            background: #e3f2fd;
+            border-left: 4px solid #667eea;
+        }
+
+        .alert-item:last-child {
+            border-bottom: none;
+        }
+
+        .alert-tiny-id {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .alert-message {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .alert-status {
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .success-message {
+            background: #4caf50;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message {
+            background: #f44336;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 24px;
+            color: #333;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .controls-row select {
+            flex: 0 0 120px;
+        }
+
+        .controls-row label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            flex: 0 0 auto;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .controls-row button {
+            flex: 1;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .status-open {
+            background: #f44336;
+        }
+
+        .status-acked {
+            background: #2196F3;
+        }
+
+        .status-closed {
+            background: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Setup Screen -->
+        <div id="setupScreen" class="screen">
+            <div class="content">
+                <div class="title">⚙️ First Time Setup</div>
+                
+                <div class="form-group">
+                    <label for="cloudId">Cloud ID</label>
+                    <input type="text" id="cloudId" placeholder="Enter Cloud ID">
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="Enter Email">
+                </div>
+
+                <div class="form-group">
+                    <label for="apiToken">API Token</label>
+                    <input type="password" id="apiToken" placeholder="Enter API Token">
+                </div>
+
+                <button onclick="saveCredentials()">💾 Save Credentials</button>
+            </div>
+        </div>
+
+        <!-- Main Screen -->
+        <div id="mainScreen" class="screen">
+            <div class="header">
+                <h1>🚨 Alert Manager</h1>
+                <div class="settings-icon" onclick="showSetup()">⚙️</div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('action')">Action</button>
+                <button class="tab" onclick="switchTab('list')">Alerts List</button>
+            </div>
+
+            <div class="content">
+                <div id="successMessage" class="success-message"></div>
+                <div id="errorMessage" class="error-message"></div>
+
+                <!-- Action Tab -->
+                <div id="actionTab" class="screen active">
+                    <div class="title">Quick Action</div>
+
+                    <div class="form-group">
+                        <label for="alertId">Alert Tiny ID</label>
+                        <input type="number" id="alertId" placeholder="Enter Alert Tiny ID">
+                    </div>
+
+                    <div class="button-group">
+                        <button onclick="performAction('acknowledge')">✅ Acknowledge</button>
+                        <button onclick="performAction('close')">❌ Close</button>
+                    </div>
+                </div>
+
+                <!-- List Tab -->
+                <div id="listTab" class="screen">
+                    <div class="title">All Alerts</div>
+
+                    <div class="controls-row">
+                        <select id="environmentFilter" onchange="loadAlerts()">
+                            <option value="acc">acc</option>
+                            <option value="beta">beta</option>
+                            <option value="prod" selected>prod</option>
+                        </select>
+                        
+                        <label>
+                            <input type="checkbox" id="showAcknowledged" onchange="loadAlerts()">
+                            Show Acknowledged
+                        </label>
+                        
+                        <button onclick="loadAlerts()">🔄 Refresh</button>
+                    </div>
+
+                    <div id="loadingDiv" class="loading" style="display: none;">
+                        Loading alerts...
+                    </div>
+
+                    <div id="alertList" class="alert-list"></div>
+
+                    <div class="button-group">
+                        <button id="listAckBtn" onclick="performListAction('acknowledge')" disabled>✅ Acknowledge</button>
+                        <button id="listCloseBtn" onclick="performListAction('close')" disabled>❌ Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedAlert = null;
+
+        // Check if credentials exist on load
+        window.onload = function() {
+            const cloudId = localStorage.getItem('cloud_id');
+            const email = localStorage.getItem('email');
+            const apiToken = localStorage.getItem('api_token');
+
+            if (cloudId && email && apiToken) {
+                showMainScreen();
+            } else {
+                showSetup();
+            }
+        };
+
+        function showSetup() {
+            document.getElementById('setupScreen').classList.add('active');
+            document.getElementById('mainScreen').classList.remove('active');
+        }
+
+        function showMainScreen() {
+            document.getElementById('setupScreen').classList.remove('active');
+            document.getElementById('mainScreen').classList.add('active');
+        }
+
+        function saveCredentials() {
+            const cloudId = document.getElementById('cloudId').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const apiToken = document.getElementById('apiToken').value.trim();
+
+            if (!cloudId || !email || !apiToken) {
+                showError('Please fill all fields');
+                return;
+            }
+
+            localStorage.setItem('cloud_id', cloudId);
+            localStorage.setItem('email', email);
+            localStorage.setItem('api_token', apiToken);
+
+            showSuccess('Credentials saved!');
+            setTimeout(showMainScreen, 1000);
+        }
+
+        function switchTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(t => t.classList.remove('active'));
+
+            if (tab === 'action') {
+                event.target.classList.add('active');
+                document.getElementById('actionTab').classList.add('active');
+                document.getElementById('listTab').classList.remove('active');
+            } else if (tab === 'list') {
+                event.target.classList.add('active');
+                document.getElementById('actionTab').classList.remove('active');
+                document.getElementById('listTab').classList.add('active');
+                
+                // Load alerts if list is empty
+                const alertList = document.getElementById('alertList');
+                if (!alertList.children.length) {
+                    loadAlerts();
+                }
+            }
+        }
+
+        async function performAction(action) {
+            const tinyId = document.getElementById('alertId').value.trim();
+
+            if (!tinyId) {
+                showError('Please enter an alert ID');
+                return;
+            }
+
+            const cloudId = localStorage.getItem('cloud_id');
+            const email = localStorage.getItem('email');
+            const apiToken = localStorage.getItem('api_token');
+
+            try {
+                // Get alert ID from tiny ID
+                const alertId = await getAlertId(cloudId, email, apiToken, tinyId);
+                
+                if (!alertId) {
+                    showError(`Failed to retrieve alert with ID ${tinyId}`);
+                    return;
+                }
+
+                // Execute action
+                const success = await executeAction(cloudId, email, apiToken, alertId, action);
+                
+                if (success) {
+                    showSuccess(`Successfully ${action}d alert ${tinyId}`);
+                    document.getElementById('alertId').value = '';
+                } else {
+                    showError(`Failed to ${action} alert`);
+                }
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            }
+        }
+
+        async function loadAlerts() {
+            const cloudId = localStorage.getItem('cloud_id');
+            const email = localStorage.getItem('email');
+            const apiToken = localStorage.getItem('api_token');
+            const environment = document.getElementById('environmentFilter').value;
+            const showAcknowledged = document.getElementById('showAcknowledged').checked;
+
+            const loadingDiv = document.getElementById('loadingDiv');
+            const alertList = document.getElementById('alertList');
+
+            loadingDiv.style.display = 'block';
+            alertList.innerHTML = '';
+
+            try {
+                const alerts = await fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged);
+                
+                loadingDiv.style.display = 'none';
+
+                if (alerts.length === 0) {
+                    alertList.innerHTML = '<div class="loading">No alerts found</div>';
+                    return;
+                }
+
+                alerts.forEach(alert => {
+                    const item = document.createElement('div');
+                    item.className = 'alert-item';
+                    item.onclick = () => selectAlert(alert, item);
+                    
+                    // Determine status badge class
+                    let statusClass = 'status-acked';
+                    const status = alert.status.toUpperCase();
+                    if (status === 'OPEN') statusClass = 'status-open';
+                    else if (status === 'CLOSED') statusClass = 'status-closed';
+                    
+                    item.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                            <div class="alert-tiny-id">#${alert.tinyId}</div>
+                            <div class="status-badge ${statusClass}">
+                                ${alert.status}
+                            </div>
+                        </div>
+                        <div class="alert-message">${alert.message}</div>
+                    `;
+                    alertList.appendChild(item);
+                });
+
+                showSuccess(`Loaded ${alerts.length} alerts`);
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                showError(`Error loading alerts: ${error.message}`);
+            }
+        }
+
+        function selectAlert(alert, element) {
+            // Remove previous selection
+            document.querySelectorAll('.alert-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // Select new item
+            element.classList.add('selected');
+            selectedAlert = alert;
+
+            // Enable buttons
+            document.getElementById('listAckBtn').disabled = false;
+            document.getElementById('listCloseBtn').disabled = false;
+        }
+
+        async function performListAction(action) {
+            if (!selectedAlert) {
+                showError('Please select an alert');
+                return;
+            }
+
+            const cloudId = localStorage.getItem('cloud_id');
+            const email = localStorage.getItem('email');
+            const apiToken = localStorage.getItem('api_token');
+
+            document.getElementById('listAckBtn').disabled = true;
+            document.getElementById('listCloseBtn').disabled = true;
+
+            try {
+                const success = await executeAction(cloudId, email, apiToken, selectedAlert.id, action);
+                
+                if (success) {
+                    showSuccess(`Successfully ${action}d alert ${selectedAlert.tinyId}`);
+                    selectedAlert = null;
+                    loadAlerts(); // Refresh list
+                } else {
+                    showError(`Failed to ${action} alert`);
+                    document.getElementById('listAckBtn').disabled = false;
+                    document.getElementById('listCloseBtn').disabled = false;
+                }
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+                document.getElementById('listAckBtn').disabled = false;
+                document.getElementById('listCloseBtn').disabled = false;
+            }
+        }
+
+        async function getAlertId(cloudId, email, apiToken, tinyId) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?query=tinyId:${tinyId}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.values && data.values.length > 0) {
+                return data.values[0].id;
+            }
+            
+            return null;
+        }
+
+        async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            
+            // Build query
+            let query = `tags: ${environment} AND status: open`;
+            
+            if (!showAcknowledged) {
+                query += ' AND acknowledged: false';
+            }
+            
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?size=100&query=${encodeURIComponent(query)}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const alerts = [];
+
+            if (data.values) {
+                data.values.forEach(alert => {
+                    alerts.push({
+                        id: alert.id,
+                        tinyId: alert.tinyId || 'N/A',
+                        message: alert.message || 'No message',
+                        status: alert.status || 'Unknown'
+                    });
+                });
+            }
+
+            return alerts;
+        }
+
+        async function executeAction(cloudId, email, apiToken, alertId, action) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts/${alertId}/${action}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            return response.ok;
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            const errorDiv = document.getElementById('errorMessage');
+            
+            errorDiv.style.display = 'none';
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function showError(message) {
+            const successDiv = document.getElementById('successMessage');
+            const errorDiv = document.getElementById('errorMessage');
+            
+            successDiv.style.display = 'none';
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

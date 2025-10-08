@@ -268,6 +268,20 @@
         .status-closed {
             background: #4caf50;
         }
+        
+        .priority-bullet {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .priority-p1 { background: #d32f2f; } /* Rouge foncé - Critique */
+        .priority-p2 { background: #f57c00; } /* Orange - Haute */
+        .priority-p3 { background: #fbc02d; } /* Jaune - Moyenne */
+        .priority-p4 { background: #388e3c; } /* Vert - Basse */
+        .priority-p5 { background: #757575; } /* Gris - Très basse */
     </style>
 </head>
 <body>
@@ -344,6 +358,10 @@
                         </label>
                         
                         <button onclick="loadAlerts()">🔄 Refresh</button>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="text" id="searchPattern" placeholder="🔍 Search in messages..." oninput="filterAlertsByPattern()">
                     </div>
 
                     <div id="loadingDiv" class="loading" style="display: none;">
@@ -495,9 +513,14 @@
                     if (status === 'OPEN') statusClass = 'status-open';
                     else if (status === 'CLOSED') statusClass = 'status-closed';
                     
+                    // Determine priority class
+                    const priorityClass = `priority-${alert.priority.toLowerCase()}`;
+
                     item.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                            <div class="alert-tiny-id">#${alert.tinyId}</div>
+                            <div class="alert-tiny-id">
+                                <span class="priority-bullet ${priorityClass}"></span>#${alert.tinyId}
+                            </div>
                             <div class="status-badge ${statusClass}">
                                 ${alert.status}
                             </div>
@@ -512,6 +535,22 @@
                 loadingDiv.style.display = 'none';
                 showError(`Error loading alerts: ${error.message}`);
             }
+        }
+
+        function filterAlertsByPattern() {
+            const pattern = document.getElementById('searchPattern').value.toLowerCase().trim();
+            const alertItems = document.querySelectorAll('.alert-item');
+            
+            alertItems.forEach(item => {
+                const message = item.querySelector('.alert-message').textContent.toLowerCase();
+                const tinyId = item.querySelector('.alert-tiny-id').textContent.toLowerCase();
+                
+                if (pattern === '' || message.includes(pattern) || tinyId.includes(pattern)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
         }
 
         function selectAlert(alert, element) {
@@ -619,7 +658,8 @@
                         id: alert.id,
                         tinyId: alert.tinyId || 'N/A',
                         message: alert.message || 'No message',
-                        status: alert.status || 'Unknown'
+                        status: alert.status || 'Unknown',
+                        priority: alert.priority || 'P3'
                     });
                 });
             }

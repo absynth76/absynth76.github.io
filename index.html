@@ -306,6 +306,13 @@
                     <input type="password" id="apiToken" placeholder="Enter API Token">
                 </div>
 
+                <div class="form-group">
+                    <label>Your Teams (auto-detected on save)</label>
+                    <div id="teamsPreview" style="font-size: 14px; color: #666; font-style: italic;">
+                        Teams will be detected automatically
+                    </div>
+                </div>
+
                 <button onclick="saveCredentials()">💾 Save Credentials</button>
             </div>
         </div>
@@ -387,8 +394,9 @@
             const cloudId = localStorage.getItem('cloud_id');
             const email = localStorage.getItem('email');
             const apiToken = localStorage.getItem('api_token');
+            const teams = localStorage.getItem('teams');
 
-            if (cloudId && email && apiToken) {
+            if (cloudId && email && apiToken && teams) {
                 showMainScreen();
             } else {
                 showSetup();
@@ -405,7 +413,7 @@
             document.getElementById('mainScreen').classList.add('active');
         }
 
-        function saveCredentials() {
+        async function saveCredentials() {
             const cloudId = document.getElementById('cloudId').value.trim();
             const email = document.getElementById('email').value.trim();
             const apiToken = document.getElementById('apiToken').value.trim();
@@ -415,12 +423,34 @@
                 return;
             }
 
-            localStorage.setItem('cloud_id', cloudId);
-            localStorage.setItem('email', email);
-            localStorage.setItem('api_token', apiToken);
+            try {
+                // Fetch user teams
+                const teamsPreview = document.getElementById('teamsPreview');
+                teamsPreview.textContent = 'Fetching teams...';
+                
+                const teams = await fetchUserTeams(cloudId, email, apiToken);
+                
+                if (teams.length === 0) {
+                    showError('No teams found for this user');
+                    teamsPreview.textContent = 'No teams found';
+                    return;
+                }
 
-            showSuccess('Credentials saved!');
-            setTimeout(showMainScreen, 1000);
+                // Display teams
+                teamsPreview.textContent = teams.map(t => t.teamName).join(', ');
+
+                // Save credentials and teams
+                localStorage.setItem('cloud_id', cloudId);
+                localStorage.setItem('email', email);
+                localStorage.setItem('api_token', apiToken);
+                localStorage.setItem('teams', JSON.stringify(teams));
+
+                showSuccess(`Credentials saved! Found ${teams.length} team(s)`);
+                setTimeout(showMainScreen, 1500);
+            } catch (error) {
+                showError(`Error fetching teams: ${error.message}`);
+                document.getElementById('teamsPreview').textContent = 'Error fetching teams';
+            }
         }
 
         function switchTab(tab) {
@@ -628,12 +658,27 @@
         async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {
             const credentials = btoa(`${email}:${apiToken}`);
             
+            // Get teams from localStorage
+            const teamsJson = localStorage.getItem('teams');
+            let teamsQuery = '';
+            
+            if (teamsJson) {
+                const teams = JSON.parse(teamsJson);
+                if (teams.length > 0) {
+                    const teamConditions = teams.map(team => `teams:"${team.teamName}"`).join(' OR ');
+                    teamsQuery = ` AND (${teamConditions})`;
+                }
+            }
+            
             // Build query
             let query = `tags: ${environment} AND status: open`;
             
             if (!showAcknowledged) {
                 query += ' AND acknowledged: false';
             }
+            
+            // Add teams filter
+            query += teamsQuery;
             
             const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?size=100&query=${encodeURIComponent(query)}`;
 
@@ -667,6 +712,7 @@
             return alerts;
         }
 
+        
         async function executeAction(cloudId, email, apiToken, alertId, action) {
             const credentials = btoa(`${email}:${apiToken}`);
             const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts/${alertId}/${action}`;
@@ -680,6 +726,37 @@
             });
 
             return response.ok;
+        }
+
+        async function fetchUserTeams(cloudId, email, apiToken) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/teams`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const teams = [];
+
+            if (data.data && Array.isArray(data.data)) {
+                data.data.forEach(team => {
+                    teams.push({
+                        teamId: team.id || team.teamId,
+                        teamName: team.name || team.teamName
+                    });
+                });
+            }
+
+            return teams;
         }
 
         function showSuccess(message) {

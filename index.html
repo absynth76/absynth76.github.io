@@ -671,7 +671,7 @@
             }
             
             // Build query
-            let query = `tags: ${environment} AND status: open`;
+            let query = `(tags: ${environment} OR (tags: testnotification AND tags: duty)) AND status: open`;
             
             if (!showAcknowledged) {
                 query += ' AND acknowledged: false';

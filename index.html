@@ -276,12 +276,12 @@
             border-radius: 50%;
             margin-right: 6px;
         }
-
-        .priority-P1 { background: #d32f2f; } /* Rouge foncé - Critique */
-        .priority-P2 { background: #f57c00; } /* Orange - Haute */
-        .priority-P3 { background: #fbc02d; } /* Jaune - Moyenne */
-        .priority-P4 { background: #388e3c; } /* Vert - Basse */
-        .priority-P5 { background: #757575; } /* Gris - Très basse */
+        
+        .priority-p1 { background: #d32f2f; } /* Rouge foncé - Critique */
+        .priority-p2 { background: #f57c00; } /* Orange - Haute */
+        .priority-p3 { background: #fbc02d; } /* Jaune - Moyenne */
+        .priority-p4 { background: #388e3c; } /* Vert - Basse */
+        .priority-p5 { background: #757575; } /* Gris - Très basse */
     </style>
 </head>
 <body>
@@ -325,28 +325,13 @@
             </div>
 
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('action')">Action</button>
                 <button class="tab" onclick="switchTab('list')">Alerts List</button>
+                <button class="tab active" onclick="switchTab('action')">Action</button>
             </div>
 
             <div class="content">
                 <div id="successMessage" class="success-message"></div>
                 <div id="errorMessage" class="error-message"></div>
-
-                <!-- Action Tab -->
-                <div id="actionTab" class="screen active">
-                    <div class="title">Quick Action</div>
-
-                    <div class="form-group">
-                        <label for="alertId">Alert Tiny ID</label>
-                        <input type="number" id="alertId" placeholder="Enter Alert Tiny ID">
-                    </div>
-
-                    <div class="button-group">
-                        <button onclick="performAction('acknowledge')">✅ Acknowledge</button>
-                        <button onclick="performAction('close')">❌ Close</button>
-                    </div>
-                </div>
 
                 <!-- List Tab -->
                 <div id="listTab" class="screen">
@@ -380,6 +365,21 @@
                     <div class="button-group">
                         <button id="listAckBtn" onclick="performListAction('acknowledge')" disabled>✅ Acknowledge</button>
                         <button id="listCloseBtn" onclick="performListAction('close')" disabled>❌ Close</button>
+                    </div>
+                </div>
+
+                <!-- Action Tab -->
+                <div id="actionTab" class="screen active">
+                    <div class="title">Quick Action</div>
+
+                    <div class="form-group">
+                        <label for="alertId">Alert Tiny ID</label>
+                        <input type="number" id="alertId" placeholder="Enter Alert Tiny ID">
+                    </div>
+
+                    <div class="button-group">
+                        <button onclick="performAction('acknowledge')">✅ Acknowledge</button>
+                        <button onclick="performAction('close')">❌ Close</button>
                     </div>
                 </div>
             </div>
@@ -617,7 +617,8 @@
                 if (success) {
                     showSuccess(`Successfully ${action}d alert ${selectedAlert.tinyId}`);
                     selectedAlert = null;
-                    loadAlerts(); // Refresh list
+
+                    setTimeout(() => loadAlerts(), 1500); // Refresh list
                 } else {
                     showError(`Failed to ${action} alert`);
                     document.getElementById('listAckBtn').disabled = false;
@@ -632,7 +633,12 @@
 
         async function getAlertId(cloudId, email, apiToken, tinyId) {
             const credentials = btoa(`${email}:${apiToken}`);
-            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?query=tinyId:${tinyId}`;
+            
+            let query = `tinyId:${tinyId} AND (tags: prod OR (tags: testnotification AND tags: duty))`;
+            let teamsQuery = getTeamsFilter();
+            query += `${teamsQuery}`;
+            
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?query=${encodeURIComponent(query)}`;
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -655,9 +661,7 @@
             return null;
         }
 
-        async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {
-            const credentials = btoa(`${email}:${apiToken}`);
-            
+        function getTeamsFilter() {
             // Get teams from localStorage
             const teamsJson = localStorage.getItem('teams');
             let teamsQuery = '';
@@ -669,16 +673,32 @@
                     teamsQuery = ` AND (${teamConditions})`;
                 }
             }
+
+            return teamsQuery;
+        }
+
+        async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            
+            // Get teams from localStorage
+            const teamsJson = localStorage.getItem('teams');
+            let teamsQuery = getTeamsFilter();
             
             // Build query
-            let query = `(tags: ${environment} OR (tags: testnotification AND tags: duty)) AND status: open`;
+            let query = `status: open`;
+
+            if (environment == 'prod'){
+                query += ' AND (tags: prod OR (tags: testnotification AND tags: duty))'
+            } else {
+                query += ` AND tags: ${environment}`
+            }
             
             if (!showAcknowledged) {
                 query += ' AND acknowledged: false';
             }
             
             // Add teams filter
-            query += teamsQuery;
+            query += `${teamsQuery}`;
             
             const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?size=100&query=${encodeURIComponent(query)}`;
 

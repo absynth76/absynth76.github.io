@@ -282,6 +282,57 @@
         .priority-p3 { background: #fbc02d; } /* Jaune - Moyenne */
         .priority-p4 { background: #388e3c; } /* Vert - Basse */
         .priority-p5 { background: #757575; } /* Gris - Très basse */
+
+        .action-alert-preview {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .action-alert-preview.visible {
+            display: block;
+        }
+
+        .action-alert-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .action-alert-item:hover {
+            background: #f5f5f5;
+        }
+
+        .action-alert-item.selected {
+            background: #e3f2fd;
+            border-left: 4px solid #667eea;
+        }
+
+        .action-alert-item:last-child {
+            border-bottom: none;
+        }
+
+        .action-alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .action-alert-tiny {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .action-alert-msg {
+            color: #666;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -325,8 +376,8 @@
             </div>
 
             <div class="tabs">
-                <button class="tab" onclick="switchTab('list')">Alerts List</button>
-                <button class="tab active" onclick="switchTab('action')">Action</button>
+                <button class="tab active" onclick="switchTab('list')">Alerts List</button>
+                <button class="tab" onclick="switchTab('action')">Action</button>
             </div>
 
             <div class="content">
@@ -334,7 +385,7 @@
                 <div id="errorMessage" class="error-message"></div>
 
                 <!-- List Tab -->
-                <div id="listTab" class="screen">
+                <div id="listTab" class="screen active">
                     <div class="title">All Alerts</div>
 
                     <div class="controls-row">
@@ -374,12 +425,18 @@
 
                     <div class="form-group">
                         <label for="alertId">Alert Tiny ID</label>
-                        <input type="number" id="alertId" placeholder="Enter Alert Tiny ID">
+                        <input type="number" id="alertId" placeholder="Enter Alert Tiny ID" oninput="searchAlertsByTinyId()">
+                    </div>
+
+                    <div id="actionAlertPreview" class="action-alert-preview">
+                        <div id="actionLoadingDiv" class="loading" style="display: none; padding: 20px;">
+                            Searching alerts...
+                        </div>
                     </div>
 
                     <div class="button-group">
-                        <button onclick="performAction('acknowledge')">✅ Acknowledge</button>
-                        <button onclick="performAction('close')">❌ Close</button>
+                        <button id="actionAckBtn" onclick="performActionOnSelected('acknowledge')" disabled>✅ Acknowledge</button>
+                        <button id="actionCloseBtn" onclick="performActionOnSelected('close')" disabled>❌ Close</button>
                     </div>
                 </div>
             </div>
@@ -388,6 +445,7 @@
 
     <script>
         let selectedAlert = null;
+        let actionSearchTimeout = null;
 
         // Check if credentials exist on load
         window.onload = function() {
@@ -467,18 +525,106 @@
                 document.getElementById('listTab').classList.add('active');
                 
                 // Load alerts if list is empty
-                const alertList = document.getElementById('alertList');
-                if (!alertList.children.length) {
-                    loadAlerts();
-                }
+                //const alertList = document.getElementById('alertList');
+                //if (!alertList.children.length) {
+                loadAlerts();
+                //}
             }
         }
 
-        async function performAction(action) {
+        async function searchAlertsByTinyId() {
             const tinyId = document.getElementById('alertId').value.trim();
+            const previewDiv = document.getElementById('actionAlertPreview');
+            
+            // Reset selection
+            selectedActionAlert = null;
+            document.getElementById('actionAckBtn').disabled = true;
+            document.getElementById('actionCloseBtn').disabled = true;
 
             if (!tinyId) {
-                showError('Please enter an alert ID');
+                previewDiv.classList.remove('visible');
+                previewDiv.innerHTML = '<div id="actionLoadingDiv" class="loading" style="display: none; padding: 20px;">Searching alerts...</div>';
+                return;
+            }
+
+            // Debounce: wait 500ms after user stops typing
+            clearTimeout(actionSearchTimeout);
+            actionSearchTimeout = setTimeout(async () => {
+                const cloudId = localStorage.getItem('cloud_id');
+                const email = localStorage.getItem('email');
+                const apiToken = localStorage.getItem('api_token');
+                const teamsList = getTeamsListAsString();
+
+                previewDiv.classList.add('visible');
+                previewDiv.innerHTML = '<div class="loading" style="padding: 20px;">Searching alerts...</div>';
+
+                try {
+                    const alerts = await getAlertsByTinyId(cloudId, email, apiToken, tinyId);
+
+                    if (alerts.length === 0) {
+                        previewDiv.innerHTML = '<div class="loading" style="padding: 20px;">No alerts found for in groups ' + teamsList + ' with ID ' + tinyId + '</div>';
+                        return;
+                    }
+
+                    // Display alerts
+                    previewDiv.innerHTML = '';
+                    alerts.forEach((alert, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'action-alert-item';
+                        item.onclick = () => selectActionAlert(alert, item);
+                        
+                        // Determine status badge class
+                        let statusClass = 'status-acked';
+                        const status = alert.status.toUpperCase();
+                        if (status === 'OPEN') statusClass = 'status-open';
+                        else if (status === 'CLOSED') statusClass = 'status-closed';
+                        
+                        // Determine priority class
+                        const priorityClass = `priority-${alert.priority.toLowerCase()}`;
+
+                        item.innerHTML = `
+                            <div class="action-alert-header">
+                                <div class="action-alert-tiny">
+                                    <span class="priority-bullet ${priorityClass}"></span>#${alert.tinyId}
+                                </div>
+                                <div class="status-badge ${statusClass}">
+                                    ${alert.status}
+                                </div>
+                            </div>
+                            <div class="action-alert-msg">${alert.message}</div>
+                        `;
+                        previewDiv.appendChild(item);
+
+                        // Auto-select if only one alert
+                        if (index === 0 && alerts.length === 1) {
+                            selectActionAlert(alert, item);
+                        }
+                    });
+
+                } catch (error) {
+                    previewDiv.innerHTML = '<div class="loading" style="padding: 20px; color: #f44336;">Error: ' + error.message + '</div>';
+                }
+            }, 500);
+        }
+
+        function selectActionAlert(alert, element) {
+            // Remove previous selection
+            document.querySelectorAll('.action-alert-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // Select new item
+            element.classList.add('selected');
+            selectedActionAlert = alert;
+
+            // Enable buttons
+            document.getElementById('actionAckBtn').disabled = false;
+            document.getElementById('actionCloseBtn').disabled = false;
+        }
+
+        async function performActionOnSelected(action) {
+            if (!selectedActionAlert) {
+                showError('Please select an alert');
                 return;
             }
 
@@ -486,26 +632,28 @@
             const email = localStorage.getItem('email');
             const apiToken = localStorage.getItem('api_token');
 
-            try {
-                // Get alert ID from tiny ID
-                const alertId = await getAlertId(cloudId, email, apiToken, tinyId);
-                
-                if (!alertId) {
-                    showError(`Failed to retrieve alert with ID ${tinyId}`);
-                    return;
-                }
+            document.getElementById('actionAckBtn').disabled = true;
+            document.getElementById('actionCloseBtn').disabled = true;
 
-                // Execute action
-                const success = await executeAction(cloudId, email, apiToken, alertId, action);
+            try {
+                const success = await executeAction(cloudId, email, apiToken, selectedActionAlert.id, action);
                 
                 if (success) {
-                    showSuccess(`Successfully ${action}d alert ${tinyId}`);
+                    showSuccess(`Successfully ${action}d alert #${selectedActionAlert.tinyId}`);
+                    
+                    // Clear and reset
                     document.getElementById('alertId').value = '';
+                    document.getElementById('actionAlertPreview').classList.remove('visible');
+                    selectedActionAlert = null;
                 } else {
                     showError(`Failed to ${action} alert`);
+                    document.getElementById('actionAckBtn').disabled = false;
+                    document.getElementById('actionCloseBtn').disabled = false;
                 }
             } catch (error) {
                 showError(`Error: ${error.message}`);
+                document.getElementById('actionAckBtn').disabled = false;
+                document.getElementById('actionCloseBtn').disabled = false;
             }
         }
 
@@ -634,7 +782,7 @@
         async function getAlertId(cloudId, email, apiToken, tinyId) {
             const credentials = btoa(`${email}:${apiToken}`);
             
-            let query = `tinyId:${tinyId} AND (tags: prod OR (tags: testnotification AND tags: duty))`;
+            let query = `tinyId:${tinyId}`;
             let teamsQuery = getTeamsFilter();
             query += `${teamsQuery}`;
             
@@ -661,6 +809,45 @@
             return null;
         }
 
+        async function getAlertsByTinyId(cloudId, email, apiToken, tinyId) {
+            const credentials = btoa(`${email}:${apiToken}`);
+            
+            let query = `tinyId:${tinyId} AND (tags: prod OR (tags: testnotification AND tags: duty))`;
+            let teamsQuery = getTeamsFilter();
+            query += `${teamsQuery}`;
+            
+            const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?query=${encodeURIComponent(query)}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Basic ${credentials}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const alerts = [];
+            
+            if (data.values) {
+                data.values.forEach(alert => {
+                    alerts.push({
+                        id: alert.id,
+                        tinyId: alert.tinyId || 'N/A',
+                        message: alert.message || 'No message',
+                        status: alert.status || 'Unknown',
+                        priority: alert.priority || 'P3'
+                    });
+                });
+            }
+            
+            return alerts;
+        }
+
         function getTeamsFilter() {
             // Get teams from localStorage
             const teamsJson = localStorage.getItem('teams');
@@ -675,6 +862,22 @@
             }
 
             return teamsQuery;
+        }
+
+        function getTeamsListAsString() {
+            // Get teams from localStorage
+            const teamsJson = localStorage.getItem('teams');
+            let teamsList = '';
+            
+            if (teamsJson) {
+                const teams = JSON.parse(teamsJson);
+                if (teams.length > 0) {
+                    const teamConditions = teams.map(team => `${team.teamName}`).join(', ');
+                    teamsList = `${teamConditions}`;
+                }
+            }
+
+            return teamsList;
         }
 
         async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {

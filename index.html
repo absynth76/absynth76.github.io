@@ -333,6 +333,31 @@
             color: #666;
             font-size: 14px;
         }
+
+        .alert-item.multi-selected {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .select-all-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+
+        .select-all-row button {
+            flex: 0 0 auto;
+            width: auto;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
+        .selection-count {
+            color: #666;
+            font-size: 14px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -408,6 +433,12 @@
                         <input type="text" id="searchPattern" placeholder="🔍 Search in messages..." oninput="filterAlertsByPattern()">
                     </div>
 
+                    <div class="select-all-row">
+                        <button onclick="selectAllVisible()">☑️ Select All Visible</button>
+                        <button onclick="deselectAll()">⬜ Deselect All</button>
+                        <span class="selection-count" id="selectionCount">0 selected</span>
+                    </div>
+
                     <div id="loadingDiv" class="loading" style="display: none;">
                         Loading alerts...
                     </div>
@@ -445,7 +476,7 @@
     </div>
 
     <script>
-        let selectedAlert = null;
+        let selectedAlerts = new Set();
         let actionSearchTimeout = null;
 
         // Check if credentials exist on load
@@ -706,10 +737,18 @@
                         </div>
                         <div class="alert-message">${alert.message}</div>
                     `;
+
+                    // Store alert data in the DOM element for later reference
+                    item._alertData = alert;
+
+                    alertList.appendChild(item);
                     alertList.appendChild(item);
                 });
 
                 showSuccess(`Loaded ${alerts.length} alerts`);
+
+                // Reapply filter
+                filterAlertsByPattern();
             } catch (error) {
                 loadingDiv.style.display = 'none';
                 showError(`Error loading alerts: ${error.message}`);
@@ -720,36 +759,100 @@
             const pattern = document.getElementById('searchPattern').value.toLowerCase().trim();
             const alertItems = document.querySelectorAll('.alert-item');
             
+            let visibleCount = 0;
             alertItems.forEach(item => {
                 const message = item.querySelector('.alert-message').textContent.toLowerCase();
                 const tinyId = item.querySelector('.alert-tiny-id').textContent.toLowerCase();
                 
                 if (pattern === '' || message.includes(pattern) || tinyId.includes(pattern)) {
                     item.style.display = 'block';
+                    visibleCount++;
                 } else {
                     item.style.display = 'none';
                 }
             });
+            
+            // Update selection count to show visible alerts
+            const selectedCount = selectedAlerts.size;
+            document.getElementById('selectionCount').textContent = `${selectedCount} selected (${visibleCount} visible)`;
         }
 
         function selectAlert(alert, element) {
-            // Remove previous selection
+            // Toggle selection avec Ctrl/Cmd, sinon sélection simple
+            if (event && (event.ctrlKey || event.metaKey)) {
+                // Multi-selection mode
+                if (selectedAlerts.has(alert.id)) {
+                    selectedAlerts.delete(alert.id);
+                    element.classList.remove('multi-selected');
+                } else {
+                    selectedAlerts.add(alert.id);
+                    element.classList.add('multi-selected');
+                }
+            } else {
+                // Single selection mode - remove all previous selections
+                document.querySelectorAll('.alert-item').forEach(item => {
+                    item.classList.remove('selected', 'multi-selected');
+                });
+                selectedAlerts.clear();
+                
+                selectedAlerts.add(alert.id);
+                element.classList.add('selected');
+            }
+
+            updateSelectionUI();
+        }
+
+        function selectAllVisible() {
+            selectedAlerts.clear();
+            
             document.querySelectorAll('.alert-item').forEach(item => {
-                item.classList.remove('selected');
+                // Only select visible items
+                if (item.style.display !== 'none') {
+                    item.classList.remove('selected');
+                    item.classList.add('multi-selected');
+                    
+                    // Extract alert ID from the item (we need to store it)
+                    const alertData = item._alertData;
+                    if (alertData) {
+                        selectedAlerts.add(alertData.id);
+                    }
+                }
             });
 
-            // Select new item
-            element.classList.add('selected');
-            selectedAlert = alert;
+            updateSelectionUI();
+        }
 
-            // Enable buttons
-            document.getElementById('listAckBtn').disabled = false;
-            document.getElementById('listCloseBtn').disabled = false;
+        function deselectAll() {
+            selectedAlerts.clear();
+            
+            document.querySelectorAll('.alert-item').forEach(item => {
+                item.classList.remove('selected', 'multi-selected');
+            });
+
+            updateSelectionUI();
+        }
+
+        function updateSelectionUI() {
+            const count = selectedAlerts.size;
+            document.getElementById('selectionCount').textContent = `${count} selected`;
+            
+            const hasSelection = count > 0;
+            document.getElementById('listAckBtn').disabled = !hasSelection;
+            document.getElementById('listCloseBtn').disabled = !hasSelection;
+            
+            // Update button text to show count
+            if (count > 1) {
+                document.getElementById('listAckBtn').textContent = `✅ Acknowledge (${count})`;
+                document.getElementById('listCloseBtn').textContent = `❌ Close (${count})`;
+            } else {
+                document.getElementById('listAckBtn').textContent = '✅ Acknowledge';
+                document.getElementById('listCloseBtn').textContent = '❌ Close';
+            }
         }
 
         async function performListAction(action) {
-            if (!selectedAlert) {
-                showError('Please select an alert');
+            if (selectedAlerts.size === 0) {
+                showError('Please select at least one alert');
                 return;
             }
 
@@ -760,19 +863,45 @@
             document.getElementById('listAckBtn').disabled = true;
             document.getElementById('listCloseBtn').disabled = true;
 
-            try {
-                const success = await executeAction(cloudId, email, apiToken, selectedAlert.id, action);
-                
-                if (success) {
-                    showSuccess(`Successfully ${action}d alert ${selectedAlert.tinyId}`);
-                    selectedAlert = null;
+            const alertIds = Array.from(selectedAlerts);
+            const total = alertIds.length;
+            let succeeded = 0;
+            let failed = 0;
 
-                    setTimeout(() => loadAlerts(), 1500); // Refresh list
-                } else {
-                    showError(`Failed to ${action} alert`);
-                    document.getElementById('listAckBtn').disabled = false;
-                    document.getElementById('listCloseBtn').disabled = false;
+            try {
+                // Process all selected alerts
+                for (let i = 0; i < alertIds.length; i++) {
+                    const alertId = alertIds[i];
+                    
+                    try {
+                        const success = await executeAction(cloudId, email, apiToken, alertId, action);
+                        if (success) {
+                            succeeded++;
+                        } else {
+                            failed++;
+                        }
+                    } catch (error) {
+                        failed++;
+                        console.error(`Failed to ${action} alert ${alertId}:`, error);
+                    }
+                    
+                    // Update progress
+                    document.getElementById('selectionCount').textContent = `Processing ${i + 1}/${total}...`;
                 }
+
+                // Show result
+                if (failed === 0) {
+                    showSuccess(`Successfully ${action}d ${succeeded} alert(s)`);
+                } else if (succeeded === 0) {
+                    showError(`Failed to ${action} all ${total} alert(s)`);
+                } else {
+                    showSuccess(`${action}d ${succeeded} alert(s), ${failed} failed`);
+                }
+
+                // Clear selection and refresh
+                selectedAlerts.clear();
+                setTimeout(() => loadAlerts(), 1500);
+
             } catch (error) {
                 showError(`Error: ${error.message}`);
                 document.getElementById('listAckBtn').disabled = false;

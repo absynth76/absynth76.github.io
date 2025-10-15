@@ -501,6 +501,11 @@
         function showMainScreen() {
             document.getElementById('setupScreen').classList.remove('active');
             document.getElementById('mainScreen').classList.add('active');
+            // Auto-load alerts when showing main screen
+            const alertList = document.getElementById('alertList');
+            if (!alertList.children.length) {
+                loadAlerts();
+            }
         }
 
         async function saveCredentials() {
@@ -942,7 +947,7 @@
         async function getAlertsByTinyId(cloudId, email, apiToken, tinyId) {
             const credentials = btoa(`${email}:${apiToken}`);
             
-            let query = `tinyId:${tinyId} AND (tags: prod OR (tags: testnotification AND tags: duty))`;
+            let query = `tinyId:${tinyId} AND (tags: prod OR tags: production OR (tags: testnotification AND tags: duty))`;
             let teamsQuery = getTeamsFilter();
             query += `${teamsQuery}`;
             
@@ -1021,7 +1026,7 @@
             let query = `status: open`;
 
             if (environment == 'prod'){
-                query += ' AND (tags: prod OR (tags: testnotification AND tags: duty))'
+                query += ' AND (tags: prod OR tags: production OR (tags: testnotification AND tags: duty))'
             } else {
                 query += ` AND tags: ${environment}`
             }

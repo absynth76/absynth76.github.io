@@ -277,11 +277,11 @@
             margin-right: 6px;
         }
         
-        .priority-p1 { background: #d32f2f; } /* Rouge foncé - Critique */
-        .priority-p2 { background: #f57c00; } /* Orange - Haute */
-        .priority-p3 { background: #fbc02d; } /* Jaune - Moyenne */
-        .priority-p4 { background: #388e3c; } /* Vert - Basse */
-        .priority-p5 { background: #757575; } /* Gris - Très basse */
+        .priority-p1 { background: #d32f2f; }
+        .priority-p2 { background: #f57c00; }
+        .priority-p3 { background: #fbc02d; }
+        .priority-p4 { background: #388e3c; }
+        .priority-p5 { background: #757575; }
 
         .action-alert-preview {
             border: 2px solid #ddd;
@@ -362,110 +362,90 @@
 </head>
 <body>
     <div class="container">
-        <!-- Setup Screen -->
         <div id="setupScreen" class="screen">
             <div class="content">
                 <div class="title">⚙️ First Time Setup</div>
-                
                 <div class="form-group">
                     <label for="cloudId">Cloud ID</label>
                     <input type="text" id="cloudId" placeholder="Enter Cloud ID">
                 </div>
-
                 <div class="form-group">
                     <label for="email">Email</label>
                     <input type="email" id="email" placeholder="Enter Email">
                 </div>
-
                 <div class="form-group">
                     <label for="apiToken">API Token</label>
                     <input type="password" id="apiToken" placeholder="Enter API Token">
                 </div>
-
                 <div class="form-group">
                     <label>Your Teams (auto-detected on save)</label>
                     <div id="teamsPreview" style="font-size: 14px; color: #666; font-style: italic;">
                         Teams will be detected automatically
                     </div>
                 </div>
-
                 <button onclick="saveCredentials()">💾 Save Credentials</button>
             </div>
         </div>
-
-        <!-- Main Screen -->
         <div id="mainScreen" class="screen">
             <div class="header">
                 <h1>🚨 Alert Manager</h1>
                 <div class="settings-icon" onclick="showSetup()">⚙️</div>
             </div>
-
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('list')">Alerts List</button>
                 <button class="tab" onclick="switchTab('action')">Action</button>
             </div>
-
             <div class="content">
                 <div id="successMessage" class="success-message"></div>
                 <div id="errorMessage" class="error-message"></div>
-
-                <!-- List Tab -->
                 <div id="listTab" class="screen active">
                     <div class="title">All Alerts</div>
-
                     <div class="controls-row">
                         <select id="environmentFilter" onchange="loadAlerts()">
-                            <option value="tags: dev OR tags: development">dev</option>
-                            <option value="tags: acc OR tags: acceptance">acc</option>
-                            <option value="tags: beta">beta</option>
-                            <option value="tags: prod OR tags: production" selected>prod</option>
+                            <option value="development">dev</option>
+                            <option value="acc">acc</option>
+                            <option value="tooling">tooling</option>
+                            <option value="beta">beta</option>
+                            <option value="prod" selected>prod</option>
                         </select>
-                        
                         <label>
                             <input type="checkbox" id="showAcknowledged" onchange="loadAlerts()">
                             Show Acknowledged
                         </label>
-                        
+                        <label>
+                            <input type="checkbox" id="showClosed" onchange="loadAlerts()">
+                            Show Closed
+                        </label>
                         <button onclick="loadAlerts()">🔄 Refresh</button>
                     </div>
-
                     <div class="form-group">
                         <input type="text" id="searchPattern" placeholder="🔍 Search in messages..." oninput="filterAlertsByPattern()">
                     </div>
-
                     <div class="select-all-row">
                         <button onclick="selectAllVisible()">☑️ Select All Visible</button>
                         <button onclick="deselectAll()">⬜ Deselect All</button>
                         <span class="selection-count" id="selectionCount">0 selected</span>
                     </div>
-
                     <div id="loadingDiv" class="loading" style="display: none;">
                         Loading alerts...
                     </div>
-
                     <div id="alertList" class="alert-list"></div>
-
                     <div class="button-group">
                         <button id="listAckBtn" onclick="performListAction('acknowledge')" disabled>✅ Acknowledge</button>
                         <button id="listCloseBtn" onclick="performListAction('close')" disabled>❌ Close</button>
                     </div>
                 </div>
-
-                <!-- Action Tab -->
                 <div id="actionTab" class="screen">
                     <div class="title">Quick Action</div>
-
                     <div class="form-group">
                         <label for="alertId">Alert Tiny ID</label>
                         <input type="number" id="alertId" placeholder="Enter Alert Tiny ID" oninput="searchAlertsByTinyId()">
                     </div>
-
                     <div id="actionAlertPreview" class="action-alert-preview">
                         <div id="actionLoadingDiv" class="loading" style="display: none; padding: 20px;">
                             Searching alerts...
                         </div>
                     </div>
-
                     <div class="button-group">
                         <button id="actionAckBtn" onclick="performActionOnSelected('acknowledge')" disabled>✅ Acknowledge</button>
                         <button id="actionCloseBtn" onclick="performActionOnSelected('close')" disabled>❌ Close</button>
@@ -474,7 +454,6 @@
             </div>
         </div>
     </div>
-
     <script>
         let selectedAlerts = new Set();
         let actionSearchTimeout = null;
@@ -1017,29 +996,31 @@
 
         async function fetchAlerts(cloudId, email, apiToken, environment, showAcknowledged) {
             const credentials = btoa(`${email}:${apiToken}`);
-            
-            // Get teams from localStorage
             const teamsJson = localStorage.getItem('teams');
             let teamsQuery = getTeamsFilter();
-            
-            // Build query
-            let query = `status: open`;
-
-            if (environment.includes('prod')){
-                query += ` AND (${environment} OR (tags: testnotification AND tags: duty))`
+            const showClosed = document.getElementById('showClosed')?.checked;
+            let queryParts = [];
+            if (showClosed) {
+                queryParts.push('(status: open OR status: closed)');
             } else {
-                query += ` AND ${environment}`
+                queryParts.push('status: open');
             }
-            
+            if (environment === 'prod' || environment === 'production') {
+                queryParts.push('(tags: prod OR tags: production OR (tags: testnotification AND tags: duty))');
+            } else if (environment === 'acc' || environment === 'acceptance') {
+                queryParts.push('(tags: acc OR tags: acceptance)');
+            } else if (environment === 'dev' || environment === 'development') {
+                queryParts.push('(tags: dev OR tags: development)');
+            } else if (environment === 'tooling') {
+                queryParts.push('tags: tooling');
+            } else {
+                queryParts.push(`tags: ${environment}`);
+            }
             if (!showAcknowledged) {
-                query += ' AND acknowledged: false';
+                queryParts.push('acknowledged: false');
             }
-            
-            // Add teams filter
-            query += `${teamsQuery}`;
-            
+            let query = queryParts.join(' AND ') + teamsQuery;
             const url = `https://api.atlassian.com/jsm/ops/api/${cloudId}/v1/alerts?size=100&query=${encodeURIComponent(query)}`;
-
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
@@ -1047,14 +1028,11 @@
                     'Accept': 'application/json'
                 }
             });
-
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-
             const data = await response.json();
             const alerts = [];
-
             if (data.values) {
                 data.values.forEach(alert => {
                     alerts.push({
@@ -1066,7 +1044,6 @@
                     });
                 });
             }
-
             return alerts;
         }
 

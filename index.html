@@ -415,10 +415,10 @@
 
                     <div class="controls-row">
                         <select id="environmentFilter" onchange="loadAlerts()">
-                            <option value="development">dev</option>
-                            <option value="acc">acc</option>
-                            <option value="beta">beta</option>
-                            <option value="prod" selected>prod</option>
+                            <option value="tags: dev OR tags: development">dev</option>
+                            <option value="tags: acc OR tags: acceptance">acc</option>
+                            <option value="tags: beta">beta</option>
+                            <option value="tags: prod OR tags: production" selected>prod</option>
                         </select>
                         
                         <label>
@@ -1025,10 +1025,10 @@
             // Build query
             let query = `status: open`;
 
-            if (environment == 'prod'){
-                query += ' AND (tags: prod OR tags: production OR (tags: testnotification AND tags: duty))'
+            if (environment.includes('prod')){
+                query += ` AND (${environment} OR (tags: testnotification AND tags: duty))`
             } else {
-                query += ` AND tags: ${environment}`
+                query += ` AND ${environment}`
             }
             
             if (!showAcknowledged) {
